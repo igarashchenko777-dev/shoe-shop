@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Магазин Взуття & StepStyle (Admin Edition)</title>
+    <title>Магазин Взуття & StepStyle (Firebase Cloud)</title>
     <!-- Підключаємо Tailwind CSS для дизайну -->
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <style>
@@ -33,10 +33,13 @@
             </div>
         </section>
 
+        <!-- Статус завантаження з хмари -->
+        <div id="loading-status" class="text-center py-8 text-gray-500 font-medium">Завантаження товарів з хмари...</div>
+
         <!-- Сітка товарів -->
         <section>
             <h2 class="text-xl font-bold text-gray-900 mb-6">Каталог товарів</h2>
-            <div id="products-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+            <div id="products-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 hidden">
                 <!-- Генерується через JS -->
             </div>
         </section>
@@ -54,7 +57,6 @@
                     <span id="cart-total">0 грн</span>
                 </div>
             </div>
-            <!-- Форма оформлення замовлення -->
             <form id="order-form" onsubmit="submitOrder(event)" class="space-y-4">
                 <h3 class="text-sm font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 pb-2">Дані для доставки</h3>
                 <div>
@@ -87,18 +89,16 @@
     <div id="admin-modal" class="fixed inset-0 bg-black/60 z-50 hidden backdrop-blur-sm flex items-center justify-center p-4">
         <div class="bg-white rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-6 relative shadow-2xl">
             <button onclick="toggleAdminModal()" class="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-3xl cursor-pointer">&times;</button>
-            <h2 class="text-xl font-bold text-gray-950 mb-4">⚙️ Панель адміністратора</h2>
+            <h2 class="text-xl font-bold text-gray-950 mb-4">⚙️ Панель адміністратора (Хмара)</h2>
             
-            <!-- Форма додавання товару -->
             <form id="add-product-form" onsubmit="addNewProduct(event)" class="space-y-3 bg-gray-50 p-4 rounded-xl border border-gray-200 mb-6">
-                <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider">Додати новий товар</h3>
+                <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider">Додати новий товар у хмару</h3>
                 <div>
                     <input type="text" id="prod-name" placeholder="Назва взуття" required class="w-full p-2 text-sm border border-gray-300 rounded-lg bg-white">
                 </div>
                 <div class="grid grid-cols-2 gap-2">
                     <input type="number" id="prod-price" placeholder="Ціна (грн)" required class="w-full p-2 text-sm border border-gray-300 rounded-lg bg-white">
                     <select id="prod-category" class="w-full p-2 text-sm border border-gray-300 rounded-lg bg-white">
-                        <!-- Оновлений повний список твоїх категорій -->
                         <option value="news">Новинки</option>
                         <option value="sneakers">Кросівки</option>
                         <option value="keds">Кеди</option>
@@ -113,37 +113,49 @@
                     <input type="url" id="prod-image" placeholder="Посилання на фото (URL)" required class="w-full p-2 text-sm border border-gray-300 rounded-lg bg-white">
                 </div>
                 <button type="submit" class="w-full bg-gray-900 text-white py-2 rounded-lg text-sm font-bold hover:bg-orange-500 transition cursor-pointer">
-                    Додати в каталог
+                    Зберегти в Firebase
                 </button>
             </form>
 
-            <!-- Список товарів для видалення -->
-            <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Управління поточними товарами</h3>
-            <div id="admin-products-list" class="space-y-2 max-h-60 overflow-y-auto pr-1">
-                <!-- Список генерується через JS -->
-            </div>
+            <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Управління товарами в хмарі</h3>
+            <div id="admin-products-list" class="space-y-2 max-h-60 overflow-y-auto pr-1"></div>
         </div>
     </div>
 
-    <!-- Підвал сайту (тут схована кнопка входу) -->
+    <!-- Підвал сайту -->
     <footer class="bg-white border-t border-gray-100 py-4 mt-8">
         <div class="container mx-auto px-4 flex justify-between items-center text-xs text-gray-400">
             <span>&copy; 2026 STEP_STYLE. Всі права захищені.</span>
-            <!-- Прихований вхід для тебе -->
             <button onclick="loginAdmin()" class="hover:text-gray-600 transition cursor-pointer">Вхід для адміна</button>
         </div>
     </footer>
 
-    <!-- Логіка роботи (JavaScript) -->
-    <script>
-        // НАЛАШТУВАННЯ ТЕЛЕГРАМ
-        const TELEGRAM_BOT_TOKEN = 'ТВІЙ_ТОКЕН_БОТА'; 
-        const TELEGRAM_CHAT_ID = 'ТВІЙ_ID_КАНАЛУ_АБО_ЧАТУ';
+    <!-- ПІДКЛЮЧЕННЯ FIREBASE СДК -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getDatabase, ref, set, onValue, remove } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
-        // Пароль для входу в адмінку
+        // КОНФІГУРАЦІЯ FIREBASE (Заміни на свої дані з консолі Firebase)
+        const firebaseConfig = {
+            apiKey: "ТВІЙ_API_KEY",
+            authDomain: "ТВІЙ_PROJECT_ID.firebaseapp.com",
+            databaseURL: "https://ТВІЙ_PROJECT_ID-default-rtdb.firebaseio.com",
+            projectId: "ТВІЙ_PROJECT_ID",
+            storageBucket: "ТВІЙ_PROJECT_ID.appspot.com",
+            messagingSenderId: "ТВІЙ_СЕНДЕР_ID",
+            appId: "ТВІЙ_APP_ID"
+        };
+
+        // Ініціалізація хмари
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+
+        // ГЛОБАЛЬНІ НАЛАШТУВАННЯ МАГАЗИНУ
+        window.TELEGRAM_BOT_TOKEN = 'ТВІЙ_ТОКЕН_БОТА'; 
+        window.TELEGRAM_CHAT_ID = 'ТВІЙ_ID_КАНАЛУ_АБО_ЧАТУ';
         const ADMIN_PASSWORD = "1234"; 
 
-        const categories = [
+        window.categories = [
             { id: 'all', name: 'Все взуття' },
             { id: 'news', name: 'Новинки' },
             { id: 'sneakers', name: 'Кросівки' },
@@ -155,28 +167,80 @@
             { id: 'boots', name: 'Черевики' }
         ];
 
-        // Початкові товари за замовчуванням
-        const defaultProducts = [
-            { id: 1716000000001, name: "Білі Шкіряні Кросівки", category: "sneakers", price: 2450, image: "https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=500" },
-            { id: 1716000000002, name: "Класичні Чорні Лофери", category: "loafers", price: 3100, image: "https://images.unsplash.com/photo-1614252235316-8c857d38b5f4?w=500" },
-            { id: 1716000000003, name: "Літні Стильні Сандалі", category: "sandals", price: 1650, image: "https://images.unsplash.com/photo-1603487742131-4160ec999306?w=500" }
-        ];
+        window.products = [];
+        window.cart = [];
+        window.currentCategory = 'all';
 
-        // Завантажуємо товари з пам'яті браузера (localStorage), якщо вони там є. Якщо немає — беремо дефолтні.
-        let products = JSON.parse(localStorage.getItem('shop_products')) || defaultProducts;
-        let cart = [];
-        let currentCategory = 'all';
+        // СЛУХАЧ ХМАРИ: Автоматично оновлює вітрину при будь-яких змінах у базі даних
+        const productsRef = ref(db, 'products');
+        onValue(productsRef, (snapshot) => {
+            const data = snapshot.val();
+            window.products = [];
+            if (data) {
+                // Перетворюємо об'єкт Firebase у звичний масив
+                Object.keys(data).forEach(key => {
+                    window.products.push({ id: key, ...data[key] });
+                });
+            }
+            
+            // Ховаємо статус завантаження та показуємо товари
+            document.getElementById('loading-status').classList.add('hidden');
+            document.getElementById('products-grid').classList.remove('hidden');
+            
+            renderCategories();
+            renderProducts();
+            if (!document.getElementById('admin-modal').classList.contains('hidden')) {
+                renderAdminProducts();
+            }
+        });
 
-        // Збереження товарів у пам'ять
-        function saveProductsToStorage() {
-            localStorage.setItem('shop_products', JSON.stringify(products));
+        // ФУНКЦІЯ ДОДАВАННЯ ТОВАРУ В ХМАРУ
+        window.addNewProduct = function(event) {
+            event.preventDefault();
+            const id = Date.now().toString(); // Унікальний ключ текстовим рядком
+            const name = document.getElementById('prod-name').value;
+            const price = parseInt(document.getElementById('prod-price').value);
+            const category = document.getElementById('prod-category').value;
+            const image = document.getElementById('prod-image').value;
+
+            // Запис безпосередньо у базу даних Firebase за адресою products/id
+            set(ref(db, 'products/' + id), {
+                name: name,
+                price: price,
+                category: category,
+                image: image
+            }).then(() => {
+                document.getElementById('add-product-form').reset();
+                alert('Товар збережено в хмарній базі!');
+            }).catch(err => alert('Помилка запису: ' + err.message));
         }
 
+        // ФУНКЦІЯ ВИДАЛЕННЯ ТОВАРУ З ХМАРИ
+        window.deleteProduct = function(id) {
+            if(confirm('Видалити цей товар з хмари назавжди?')) {
+                remove(ref(db, 'products/' + id))
+                .then(() => alert('Товар видалено з хмари!'))
+                .catch(err => alert('Помилка видалення: ' + err.message));
+            }
+        }
+
+        // Логіка пароля
+        window.loginAdmin = function() {
+            const pass = prompt("Введіть пароль адміністратора:");
+            if (pass === ADMIN_PASSWORD) {
+                toggleAdminModal();
+                renderAdminProducts();
+            } else if (pass !== null) { alert("Невірний пароль!"); }
+        }
+    </script>
+
+    <!-- Візуальна логіка інтерфейсу -->
+    <script>
         function renderCategories() {
             const container = document.getElementById('categories-list');
             container.innerHTML = '';
-            categories.forEach(cat => {
-                const isActive = cat.id === currentCategory;
+            window.categories.forEach(cat => {
+                const isActive = cat.id === window.currentCategory;
                 const activeClass = isActive ? 'bg-orange-600 text-white shadow-md shadow-orange-600/20' : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50';
                 container.innerHTML += `<button onclick="filterCategory('${cat.id}')" class="${activeClass} px-5 py-2 rounded-full text-sm font-semibold whitespace-nowrap transition cursor-pointer">${cat.name}</button>`;
             });
@@ -185,7 +249,7 @@
         function renderProducts() {
             const grid = document.getElementById('products-grid');
             grid.innerHTML = '';
-            const filtered = currentCategory === 'all' ? products : products.filter(p => p.category === currentCategory);
+            const filtered = window.currentCategory === 'all' ? window.products : window.products.filter(p => p.category === window.currentCategory);
 
             if (filtered.length === 0) {
                 grid.innerHTML = `<p class="text-gray-400 col-span-full text-center py-8">У цій категорії поки немає товарів.</p>`;
@@ -193,7 +257,7 @@
             }
 
             filtered.forEach(product => {
-                const catName = categories.find(c => c.id === product.category)?.name || 'Взуття';
+                const catName = window.categories.find(c => c.id === product.category)?.name || 'Взуття';
                 grid.innerHTML += `
                     <div class="bg-white rounded-2xl shadow-sm overflow-hidden border border-gray-100 flex flex-col justify-between hover:shadow-md transition duration-300">
                         <img src="${product.image}" alt="${product.name}" class="w-full h-56 object-cover">
@@ -204,7 +268,7 @@
                             </div>
                             <div class="flex justify-between items-center mt-2">
                                 <span class="text-lg font-black text-gray-950">${product.price} грн</span>
-                                <button onclick="addToCart(${product.id})" class="bg-gray-900 text-white px-3 py-2 rounded-xl text-xs font-bold hover:bg-orange-500 transition cursor-pointer">Купити</button>
+                                <button onclick="addToCart('${product.id}')" class="bg-gray-900 text-white px-3 py-2 rounded-xl text-xs font-bold hover:bg-orange-500 transition cursor-pointer">Купити</button>
                             </div>
                         </div>
                     </div>
@@ -213,31 +277,24 @@
         }
 
         function filterCategory(catId) {
-            currentCategory = catId;
+            window.currentCategory = catId;
             renderCategories();
             renderProducts();
         }
 
-        // КОРЗИНА
         function addToCart(id) {
-            const product = products.find(p => p.id === id);
-            if(product) {
-                cart.push(product);
-                updateCart();
-            }
+            const product = window.products.find(p => p.id === id);
+            if(product) { window.cart.push(product); updateCart(); }
         }
 
-        function removeFromCart(index) {
-            cart.splice(index, 1);
-            updateCart();
-        }
+        function removeFromCart(index) { window.cart.splice(index, 1); updateCart(); }
 
         function updateCart() {
-            document.getElementById('cart-count').innerText = cart.length;
+            document.getElementById('cart-count').innerText = window.cart.length;
             const container = document.getElementById('cart-items');
             container.innerHTML = '';
             let total = 0;
-            cart.forEach((item, index) => {
+            window.cart.forEach((item, index) => {
                 total += item.price;
                 container.innerHTML += `
                     <div class="flex justify-between items-center bg-gray-50 p-2.5 rounded-xl border border-gray-100">
@@ -252,74 +309,25 @@
             document.getElementById('cart-total').innerText = `${total} грн`;
         }
 
-        function toggleCart() { document.getElementById('cart-modal').classList.toggle('hidden'); }
-
-        // АДМІН-ФУНКЦІЇ
-        function loginAdmin() {
-            const pass = prompt("Введіть пароль адміністратора:");
-            if (pass === ADMIN_PASSWORD) {
-                toggleAdminModal();
-                renderAdminProducts();
-            } else if (pass !== null) {
-                alert("Невірний пароль!");
-            }
-        }
-
-        function toggleAdminModal() { document.getElementById('admin-modal').classList.toggle('hidden'); }
-
-        // Відображення списку товарів усередині адмінки для видалення
         function renderAdminProducts() {
             const container = document.getElementById('admin-products-list');
             container.innerHTML = '';
-            products.forEach(product => {
+            window.products.forEach(product => {
                 container.innerHTML += `
                     <div class="flex justify-between items-center bg-gray-100 p-2 rounded-lg text-xs">
                         <span class="font-medium truncate max-w-[250px]">${product.name} (${product.price} грн)</span>
-                        <button onclick="deleteProduct(${product.id})" class="text-red-600 font-bold hover:underline cursor-pointer">Видалити</button>
+                        <button onclick="deleteProduct('${product.id}')" class="text-red-600 font-bold hover:underline cursor-pointer">Видалити</button>
                     </div>
                 `;
             });
         }
 
-        // Додавання нового товару через форму
-        function addNewProduct(event) {
-            event.preventDefault();
-            const name = document.getElementById('prod-name').value;
-            const price = parseInt(document.getElementById('prod-price').value);
-            const category = document.getElementById('prod-category').value;
-            const image = document.getElementById('prod-image').value;
+        function toggleCart() { document.getElementById('cart-modal').classList.toggle('hidden'); }
+        function toggleAdminModal() { document.getElementById('admin-modal').classList.toggle('hidden'); }
 
-            const newProd = {
-                id: Date.now(), // Унікальний ID за часом створення
-                name: name,
-                category: category,
-                price: price,
-                image: image
-            };
-
-            products.push(newProd);
-            saveProductsToStorage(); // Зберігаємо у локальну пам'ять Mac
-            renderProducts(); // Оновлюємо вітрину магазину
-            renderAdminProducts(); // Оновлюємо список в адмінці
-            
-            document.getElementById('add-product-form').reset();
-            alert('Товар успішно додано!');
-        }
-
-        // Видалення товару
-        function deleteProduct(id) {
-            if(confirm('Ви впевнені, що хочете видалити цей товар?')) {
-                products = products.filter(p => p.id !== id);
-                saveProductsToStorage();
-                renderProducts();
-                renderAdminProducts();
-            }
-        }
-
-        // НАДСИЛАННЯ ЗАМОВЛЕННЯ В TELEGRAM
         async function submitOrder(event) {
             event.preventDefault();
-            if(cart.length === 0) { alert('Ваш кошик порожній!'); return; }
+            if(window.cart.length === 0) { alert('Ваш кошик порожній!'); return; }
 
             const name = document.getElementById('client-name').value;
             const phone = document.getElementById('client-phone').value;
@@ -328,39 +336,28 @@
             const totalSum = document.getElementById('cart-total').innerText;
 
             let itemsText = '';
-            cart.forEach((item, i) => { itemsText += `${i + 1}. ${item.name} — ${item.price} грн\n`; });
+            window.cart.forEach((item, i) => { itemsText += `${i + 1}. ${item.name} — ${item.price} грн\n`; });
 
-            const message = `🛍️ **НОВЕ ЗАМОВЛЕННЯ** 🛍️\n\n` +
-                            `👤 **Клієнт:** ${name}\n` +
-                            `📞 **Телефон:** ${phone}\n` +
-                            `🚚 **Доставка:** ${service}\n` +
-                            `📍 **Адреса:** ${address}\n\n` +
-                            `📦 **Товари:**\n${itemsText}\n` +
-                            `💰 **Разом до сплати:** ${totalSum}`;
+            const message = `🛍️ **НОВЕ ЗАМОВЛЕННЯ** 🛍️\n\n👤 **Клієнт:** ${name}\n📞 **Телефон:** ${phone}\n🚚 **Доставка:** ${service}\n📍 **Адреса:** ${address}\n\n📦 **Товари:**\n${itemsText}\n💰 **Разом до сплати:** ${totalSum}`;
 
-            if (TELEGRAM_BOT_TOKEN === 'ТВІЙ_ТОКЕН_БОТА') {
+            if (window.TELEGRAM_BOT_TOKEN === 'ТВІЙ_ТОКЕН_БОТА') {
                 alert(`Демо-режим!\nПовідомлення для Telegram:\n\n${message}`);
                 finishOrder();
                 return;
             }
 
-            const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
             try {
-                const response = await fetch(url, {
+                const response = await fetch(`https://api.telegram.org/bot${window.TELEGRAM_BOT_TOKEN}/sendMessage`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text: message, parse_mode: 'Markdown' })
+                    body: JSON.stringify({ chat_id: window.TELEGRAM_CHAT_ID, text: message, parse_mode: 'Markdown' })
                 });
-                if (response.ok) { alert('Замовлення прийнято й надіслано в Telegram!'); finishOrder(); } 
-                else { alert('Помилка Telegram API. Перевірте токени.'); }
+                if (response.ok) { alert('Замовлення надіслано в Telegram!'); finishOrder(); } 
+                else { alert('Помилка Telegram API.'); }
             } catch (e) { alert('Помилка з\'єднання.'); }
         }
 
-        function finishOrder() { cart = []; updateCart(); document.getElementById('order-form').reset(); toggleCart(); }
-
-        // Стартовий запуск
-        renderCategories();
-        renderProducts();
+        function finishOrder() { window.cart = []; updateCart(); document.getElementById('order-form').reset(); toggleCart(); }
     </script>
 </body>
 </html>
